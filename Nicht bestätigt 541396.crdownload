@@ -22,10 +22,14 @@ import schedule
 from datetime import datetime, timedelta
 from typing import Optional
 import anthropic
-from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
-from google.auth.transport.requests import Request
-from googleapiclient.discovery import build
+try:
+    from google.oauth2.credentials import Credentials
+    from google_auth_oauthlib.flow import InstalledAppFlow
+    from google.auth.transport.requests import Request
+    from googleapiclient.discovery import build
+    GOOGLE_AVAILABLE = True
+except ImportError:
+    GOOGLE_AVAILABLE = False
 import base64
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -534,6 +538,10 @@ MAIL: [vollständige Mail]"""
 
 def send_daily_report(gmail_service, all_actions: list, run_time: str):
     """Sendet den täglichen Zusammenfassungs-Report."""
+    if gmail_service is None:
+        log.info("Gmail nicht verbunden — Report wird nur geloggt")
+        log.info(f"Report: {len(all_actions)} Aktionen heute")
+        return
     today = datetime.today().strftime("%d.%m.%Y")
 
     if not all_actions:
@@ -598,10 +606,16 @@ def run_agent():
         return
 
     try:
-        # Google Services initialisieren
+        # Google Services initialisieren (optional beim ersten Start)
         log.info("Google Services verbinden...")
-        gmail_service, calendar_service = get_google_services()
-        log.info("✓ Gmail + Calendar verbunden")
+        try:
+            gmail_service, calendar_service = get_google_services()
+            log.info("✓ Gmail + Calendar verbunden")
+        except Exception as ge:
+            log.warning(f"Gmail nicht verfügbar (noch nicht eingerichtet): {ge}")
+            log.info("Agent läuft im Demo-Modus ohne Gmail")
+            send_daily_report(None, [], start_time)
+            return
 
         # Datenbank laden
         db = load_db()
